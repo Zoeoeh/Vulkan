@@ -191,9 +191,8 @@ vk::ShaderModule loadShader(AAssetManager* assetManager, const char *fileName, v
     vk::ShaderModuleCreateInfo moduleCreateInfo;
     moduleCreateInfo.codeSize = size;
     moduleCreateInfo.pCode = (uint32_t*)shaderCode;
-    moduleCreateInfo.flags = 0;
 
-    shaderModule = device.createShaderModule(moduleCreateInfo, NULL);
+    shaderModule = device.createShaderModule(moduleCreateInfo);
 
     delete[] shaderCode;
 
@@ -560,7 +559,8 @@ vk::ClearColorValue clearColor(const glm::vec4& v = glm::vec4(0)) {
 
 const std::string& getAssetPath() {
 #if defined(__ANDROID__)
-    return "";
+    static const std::string NOTHING;
+    return NOTHING;
 #else
     static std::string path;
     static std::once_flag once;

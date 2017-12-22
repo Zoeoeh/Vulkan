@@ -22,6 +22,10 @@
 #include "vulkanMeshLoader.hpp"
 #include "vulkanTextOverlay.hpp"
 
+#if defined(__ANDROID__)
+#include "AndroidNativeApp.hpp"
+#endif
+
 #define GAMEPAD_BUTTON_A 0x1000
 #define GAMEPAD_BUTTON_B 0x1001
 #define GAMEPAD_BUTTON_X 0x1002
@@ -48,8 +52,11 @@ namespace vkx {
         }
     };
 
-
+#if defined(__ANDROID__)
+    class ExampleBase : public Context, protected android::NativeApp {
+#else
     class ExampleBase : public Context {
+#endif
     protected:
         ExampleBase();
         ~ExampleBase();
@@ -175,13 +182,22 @@ namespace vkx {
             vk::Semaphore transferComplete;
         } semaphores;
 
+#if USE_GLI
         // Simple texture loader
         TextureLoader *textureLoader{ nullptr };
+#endif
 
         // Returns the base asset path (for shaders, models, textures) depending on the os
         const std::string& getAssetPath();
 
     protected:
+#if defined(__ANDROID__)
+        int32_t onInput(AInputEvent *event) override;
+        void onInitWindow() override;
+        void onLostFocus() override;
+        void onGainedFocus() override;
+#endif
+
         // Command buffer pool
         vk::CommandPool cmdPool;
 
@@ -227,7 +243,6 @@ namespace vkx {
 
         // OS specific 
 #if defined(__ANDROID__)
-        android_app* androidApp;
         // true if application has focused, false if moved to background
         bool focused = false;
 #else 
@@ -237,12 +252,7 @@ namespace vkx {
         // Setup the vulkan instance, enable required extensions and connect to the physical device (GPU)
         virtual void initVulkan();
 
-#if defined(__ANDROID__)
-        static int32_t handleAppInput(struct android_app* app, AInputEvent* event);
-        static void handleAppCommand(android_app* app, int32_t cmd);
-#else
         virtual void setupWindow();
-#endif
 
         // A default draw implementation
         virtual void draw() {
@@ -274,10 +284,12 @@ namespace vkx {
             }
             fpsTimer += (float)frameTimer;
             if (fpsTimer > 1.0f) {
+#if !defined(__ANDROID__)
                 if (!enableTextOverlay) {
                     std::string windowTitle = getWindowTitle();
                     glfwSetWindowTitle(window, windowTitle.c_str());
                 }
+#endif
                 lastFPS = frameCounter;
                 updateTextOverlay();
                 fpsTimer = 0.0f;
@@ -473,12 +485,6 @@ namespace vkx {
         // Prepare commonly used Vulkan functions
         virtual void prepare();
 
-        // Load a mesh (using ASSIMP) and create vulkan vertex and index buffers with given vertex layout
-        vkx::MeshBuffer loadMesh(
-            const std::string& filename,
-            const vkx::MeshLayout& vertexLayout,
-            float scale = 1.0f);
-
         // Start the main render loop
         void renderLoop();
 
@@ -513,8 +519,17 @@ namespace vkx {
             return camera.matrices.view;
         }
 
-#if defined(__ANDROID__)
+#if USE_ASSIMP
+        // Load a mesh (using ASSIMP) and create vulkan vertex and index buffers with given vertex layout
+        vkx::MeshBuffer loadMesh(
+            const std::string& filename,
+            const vkx::MeshLayout& vertexLayout,
+            float scale = 1.0f);
+#endif
 
+#if defined(__ANDROID__)
+        virtual void keyPressed(uint32_t key) {
+        }
 #else
         // Called if a key is pressed
         // Can be overriden in derived class to do custom key handling

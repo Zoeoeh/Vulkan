@@ -19,6 +19,7 @@
 #include <list>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <random>
 #include <set>
 #include <string>
@@ -28,18 +29,6 @@
 #include <streambuf>
 #include <thread>
 #include <vector>
-
-
-#ifdef GLEW_STATIC
-#include <GL/glew.h>
-#endif
-
-#if defined(__ANDROID__)
-#include <android/native_activity.h>
-#include <android/asset_manager.h>
-#include <android_native_app_glue.h>
-#include "vulkanandroid.h"
-#endif
 
 #include <glm/glm.hpp>
 
@@ -52,6 +41,10 @@
 #include <glm/gtx/rotate_vector.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/quaternion.hpp>
+
+#ifdef GLEW_STATIC
+#include <GL/glew.h>
+#endif
 
 using glm::ivec2;
 using glm::uvec2;
@@ -97,23 +90,29 @@ public:
     static const vec3 ZERO4;
 };
 
-
+#if USE_GLI
 // Image loading 
 #include <gli/gli.hpp>
+#endif
 
 // Vulkan!
 #include <vulkan/vulkan.hpp>
 
-// Cross platform window management
-#if !defined(__ANDROID__)
+#if defined(__ANDROID__)
+#include <android/native_activity.h>
+#include <android/asset_manager.h>
+extern AAssetManager* assetManager;
+#else
+// Cross platform window management (except android)
 #include "glfw.hpp"
 #endif
 
 // Boilerplate for running an example
 #if defined(__ANDROID__)
 #define ENTRY_POINT_START \
+        android_app* public_state; \
         void android_main(android_app* state) { \
-            app_dummy();
+            public_state = state;
 
 #define ENTRY_POINT_END \
         }
@@ -128,7 +127,5 @@ public:
 
 #define RUN_EXAMPLE(ExampleType) \
     ENTRY_POINT_START \
-        ExampleType* example = new ExampleType(); \
-        example->run(); \
-        delete(example); \
+        ExampleType().run(); \
     ENTRY_POINT_END

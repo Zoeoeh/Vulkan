@@ -13,7 +13,8 @@ macro(BUILD_EXAMPLES)
             set(TARGET ${EXAMPLE_NAME}) 
             # Find any shaders
             string(REGEX REPLACE "^.._" "" EXAMPLE_BASE_NAME ${EXAMPLE_NAME})
-            set(SHADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../data/shaders/${EXAMPLE_BASE_NAME}")
+            set(SHADER_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../data/shaders")
+            set(SHADER_DIR "${SHADER_BASE_DIR}/${EXAMPLE_BASE_NAME}")
             file(GLOB SHADERS 
                 ${SHADER_DIR}/*.vert 
                 ${SHADER_DIR}/*.frag 
@@ -21,8 +22,8 @@ macro(BUILD_EXAMPLES)
                 ${SHADER_DIR}/*.tesc 
                 ${SHADER_DIR}/*.tese
                 ${SHADER_DIR}/*.geom
-                ${CMAKE_CURRENT_SOURCE_DIR}/../data/shaders/base/*.vert
-                ${CMAKE_CURRENT_SOURCE_DIR}/../data/shaders/base/*.frag
+                ${SHADER_ROOT_DIR}/base/*.vert
+                ${SHADER_ROOT_DIR}/base/*.frag
             )
 
             source_group("Shaders" FILES ${SHADERS})
@@ -58,6 +59,9 @@ ENDMACRO()
 subdirlist(SUBDIRS ${CMAKE_CURRENT_SOURCE_DIR})
 build_examples(${SUBDIRS})
 
+
+if (WIN32)
+
 set(TARGET_NAME vr_oculus)
 target_glew()
 target_oculus()
@@ -66,3 +70,4 @@ set(TARGET_NAME vr_openvr)
 target_glew()
 target_openvr()
 
+endif()

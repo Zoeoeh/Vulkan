@@ -15,12 +15,24 @@ using namespace vkx::debug;
 
 namespace vkx {
     namespace debug {
-        std::vector<const char*> validationLayerNames = { { 
+
+#if defined(__ANDROID__)
+        std::vector<const char*> validationLayerNames = {
+          "VK_LAYER_GOOGLE_threading",
+          "VK_LAYER_LUNARG_parameter_validation",
+          "VK_LAYER_LUNARG_object_tracker",
+          "VK_LAYER_LUNARG_core_validation",
+          "VK_LAYER_LUNARG_swapchain",
+          "VK_LAYER_GOOGLE_unique_objects"
+        };
+#else
+        std::vector<const char*> validationLayerNames = { {
             // This is a meta layer that enables all of the standard
             // validation layers in the correct order :
             // threading, parameter_validation, device_limits, object_tracker, image, core_validation, swapchain, and unique_objects
             "VK_LAYER_LUNARG_standard_validation"
         } };
+#endif
 
         PFN_vkCreateDebugReportCallbackEXT CreateDebugReportCallback = VK_NULL_HANDLE;
         PFN_vkDestroyDebugReportCallbackEXT DestroyDebugReportCallback = VK_NULL_HANDLE;
@@ -63,9 +75,10 @@ namespace vkx {
         }
 
         void setupDebugging(vk::Instance instance, vk::DebugReportFlagsEXT flags) {
-            CreateDebugReportCallback = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugReportCallbackEXT");
-            DestroyDebugReportCallback = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
-            dbgBreakCallback = (PFN_vkDebugReportMessageEXT)vkGetInstanceProcAddr(instance, "vkDebugReportMessageEXT");
+            VkInstance rawInstance = instance.operator VkInstance();
+            CreateDebugReportCallback = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(rawInstance, "vkCreateDebugReportCallbackEXT");
+            DestroyDebugReportCallback = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(rawInstance, "vkDestroyDebugReportCallbackEXT");
+            dbgBreakCallback = (PFN_vkDebugReportMessageEXT)vkGetInstanceProcAddr(rawInstance, "vkDebugReportMessageEXT");
 
             VkDebugReportCallbackCreateInfoEXT dbgCreateInfo = {};
             dbgCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
@@ -73,7 +86,7 @@ namespace vkx {
             dbgCreateInfo.flags = flags.operator VkSubpassDescriptionFlags();
 
             VkResult err = CreateDebugReportCallback(
-                instance,
+                rawInstance,
                 &dbgCreateInfo,
                 nullptr,
                 &msgCallback);
@@ -81,7 +94,7 @@ namespace vkx {
         }
 
         void freeDebugCallback(vk::Instance instance) {
-            DestroyDebugReportCallback(instance, msgCallback, nullptr);
+            DestroyDebugReportCallback(instance.operator VkInstance(), msgCallback, nullptr);
         }
 
         namespace marker {

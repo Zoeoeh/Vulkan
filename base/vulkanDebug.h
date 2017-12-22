@@ -79,12 +79,12 @@ namespace vkx {
             public:
                 Marker(const vk::CommandBuffer& cmdBuffer, const std::string& name, const glm::vec4& color = glm::vec4(0.8f)) : cmdBuffer(cmdBuffer) {
                     if (active) {
-                        beginRegion(cmdBuffer, name, color);
+                        beginRegion(cmdBuffer.operator VkCommandBuffer(), name, color);
                     }
                 }
                 ~Marker() {
                     if (active) {
-                        endRegion(cmdBuffer);
+                        endRegion(cmdBuffer.operator VkCommandBuffer());
                     }
                 }
             private:

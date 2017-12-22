@@ -5,15 +5,23 @@
 *
 * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
 */
-#pragma once
-
 #include "vulkanExampleBase.h"
 
 using namespace vkx;
 
 // Avoid doing work in the ctor as it can't make use of overridden virtual functions
 // Instead, use the `run` method
-ExampleBase::ExampleBase() : swapChain(*this) { }
+#if defined(__ANDROID__)
+extern android_app* public_state;
+#endif
+
+ExampleBase::ExampleBase() :
+#if defined(__ANDROID__)
+        android::NativeApp(public_state),
+#endif
+        swapChain(*this) {
+    ::assetManager = public_state->activity->assetManager;
+}
 
 ExampleBase::~ExampleBase() {
     // Clean up Vulkan resources
@@ -43,9 +51,11 @@ ExampleBase::~ExampleBase() {
     }
     depthStencil.destroy();
 
+#if USE_GLI
     if (textureLoader) {
         delete textureLoader;
     }
+#endif
 
     if (enableTextOverlay) {
         delete textOverlay;
@@ -65,18 +75,9 @@ ExampleBase::~ExampleBase() {
 }
 
 void ExampleBase::run() {
-#if defined(__ANDROID__)
-    // Vulkan library is loaded dynamically on Android
-    bool libLoaded = loadVulkanLibrary();
-    assert(libLoaded);
-    // Attach vulkan example to global android application state
-    state->userData = vulkanExample;
-    state->onAppCmd = VulkanExample::handleAppCommand;
-    state->onInputEvent = VulkanExample::handleAppInput;
-    androidApp = state;
-#else
+// Android initialization is handled in APP_CMD_INIT_WINDOW event
+#if !defined(__ANDROID__)
     glfwInit();
-    // Android Vulkan initialization is handled in APP_CMD_INIT_WINDOW event
     initVulkan();
     setupWindow();
     prepare();
@@ -118,21 +119,19 @@ void ExampleBase::initVulkan() {
 }
 
 void ExampleBase::renderLoop() {
+    auto tStart = std::chrono::high_resolution_clock::now();
+
 #if defined(__ANDROID__)
     while (1) {
-        int ident;
-        int events;
-        struct android_poll_source* source;
         bool destroy = false;
-
         focused = true;
-
+        int ident, events;
+        struct android_poll_source* source;
         while ((ident = ALooper_pollAll(focused ? 0 : -1, NULL, &events, (void**)&source)) >= 0) {
             if (source != NULL) {
-                source->process(androidApp, source);
+                source->process(app, source);
             }
-            if (androidApp->destroyRequested != 0) {
-                LOGD("Android app destroy requested");
+            if (app->destroyRequested != 0) {
                 destroy = true;
                 break;
             }
@@ -143,38 +142,8 @@ void ExampleBase::renderLoop() {
         if (destroy) {
             break;
         }
-
-        // Render frame
-        if (prepared) {
-            auto tStart = std::chrono::high_resolution_clock::now();
-            render();
-            frameCounter++;
-            auto tEnd = std::chrono::high_resolution_clock::now();
-            auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-            frameTimer = tDiff / 1000.0f;
-            // Convert to clamped timer value
-            if (!paused) {
-                timer += timerSpeed * frameTimer;
-                if (timer > 1.0) {
-                    timer -= 1.0f;
-                }
-            }
-            fpsTimer += (float)tDiff;
-            if (fpsTimer > 1000.0f) {
-                lastFPS = frameCounter;
-                updateTextOverlay();
-                fpsTimer = 0.0f;
-                frameCounter = 0;
-            }
-        }
-    }
 #else
-    auto tStart = std::chrono::high_resolution_clock::now();
     while (!glfwWindowShouldClose(window)) {
-        auto tEnd = std::chrono::high_resolution_clock::now();
-        auto tDiff = std::chrono::duration<float, std::milli>(tEnd - tStart).count();
-        auto tDiffSeconds = tDiff / 1000.0f;
-        tStart = tEnd;
         glfwPollEvents();
 
         if (glfwJoystickPresent(0)) {
@@ -226,13 +195,18 @@ void ExampleBase::renderLoop() {
         } else {
             memset(&gamePadState.axes, 0, sizeof(gamePadState.axes));
         }
-
-
-        render();
-        update(tDiffSeconds);
-
-    }
 #endif
+        auto tEnd = std::chrono::high_resolution_clock::now();
+        auto tDiff = std::chrono::duration<float, std::milli>(tEnd - tStart).count();
+        auto tDiffSeconds = tDiff / 1000.0f;
+        tStart = tEnd;
+
+        // Render frame
+        if (prepared) {
+            render();
+            update(tDiffSeconds);
+        }
+    }
 }
 
 std::string ExampleBase::getWindowTitle() {
@@ -251,21 +225,23 @@ void ExampleBase::prepare() {
         debug::setupDebugging(instance, vk::DebugReportFlagBitsEXT::eError | vk::DebugReportFlagBitsEXT::eWarning);
     }
     if (enableDebugMarkers) {
-        debug::marker::setup(device);
+        debug::marker::setup(device.operator VkDevice());
     }
     cmdPool = getCommandPool();
 
-    swapChain.create(size, enableVsync);
     setupDepthStencil();
     setupRenderPass();
     setupRenderPassBeginInfo();
     setupFrameBuffer();
 
+#if USE_GLI
     // Create a simple texture loader class
     textureLoader = new TextureLoader(*this);
 #if defined(__ANDROID__)
-    textureLoader->assetManager = androidApp->activity->assetManager;
+    textureLoader->assetManager = app->activity->assetManager;
 #endif
+#endif
+
     if (enableTextOverlay) {
         // Load the text rendering shaders
         textOverlay = new TextOverlay(*this,
@@ -274,7 +250,11 @@ void ExampleBase::prepare() {
             renderPass);
         updateTextOverlay();
     }
+
+    prepared = true;
 }
+
+#if USE_ASSIMP
 MeshBuffer ExampleBase::loadMesh(const std::string& filename, const MeshLayout& vertexLayout, float scale) {
     MeshLoader loader;
 #if defined(__ANDROID__)
@@ -284,6 +264,8 @@ MeshBuffer ExampleBase::loadMesh(const std::string& filename, const MeshLayout& 
     assert(loader.m_Entries.size() > 0);
     return loader.createBuffers(*this, vertexLayout, scale);
 }
+#endif
+
 
 vk::SubmitInfo ExampleBase::prepareSubmitInfo(
     const std::vector<vk::CommandBuffer>& commandBuffers,
@@ -337,91 +319,83 @@ void ExampleBase::submitFrame() {
 }
 
 #if defined(__ANDROID__)
-int32_t ExampleBase::handleAppInput(struct android_app* app, AInputEvent* event) {
-    ExampleBase* vulkanExample = (ExampleBase*)app->userData;
-    if (AInputEvent_getType(event) == AINPUT_EVENT_TYPE_MOTION) {
-        if (AInputEvent_getSource(event) == AINPUT_SOURCE_JOYSTICK) {
-            vulkanExample->gamePadState.axes.x = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_X, 0);
-            vulkanExample->gamePadState.axes.y = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_Y, 0);
-            vulkanExample->gamePadState.axes.z = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_Z, 0);
-            vulkanExample->gamePadState.axes.rz = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_RZ, 0);
-        } else {
-            // todo : touch input
+int32_t ExampleBase::onInput(AInputEvent *event) {
+    auto eventType = AInputEvent_getType(event);
+    switch (eventType) {
+        case AINPUT_EVENT_TYPE_MOTION:
+            if (AInputEvent_getSource(event) == AINPUT_SOURCE_JOYSTICK) {
+                gamePadState.axes.x = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_X, 0);
+                gamePadState.axes.y = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_Y, 0);
+                gamePadState.axes.z = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_Z, 0);
+                gamePadState.axes.rz = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_RZ, 0);
+            } else {
+                // todo : touch input
+            }
+            return 1;
+        case AINPUT_EVENT_TYPE_KEY: {
+            int32_t keyCode = AKeyEvent_getKeyCode((const AInputEvent *) event);
+            int32_t action = AKeyEvent_getAction((const AInputEvent *) event);
+            int32_t button = 0;
+            if (action == AKEY_EVENT_ACTION_UP)
+                return 0;
+
+            switch (keyCode) {
+                case AKEYCODE_BUTTON_A:
+                    keyPressed(GAMEPAD_BUTTON_A);
+                    break;
+                case AKEYCODE_BUTTON_B:
+                    keyPressed(GAMEPAD_BUTTON_B);
+                    break;
+                case AKEYCODE_BUTTON_X:
+                    keyPressed(GAMEPAD_BUTTON_X);
+                    break;
+                case AKEYCODE_BUTTON_Y:
+                    keyPressed(GAMEPAD_BUTTON_Y);
+                    break;
+                case AKEYCODE_BUTTON_L1:
+                    keyPressed(GAMEPAD_BUTTON_L1);
+                    break;
+                case AKEYCODE_BUTTON_R1:
+                    keyPressed(GAMEPAD_BUTTON_R1);
+                    break;
+                case AKEYCODE_BUTTON_START:
+                    keyPressed(GAMEPAD_BUTTON_START);
+                    break;
+            };
         }
-        return 1;
     }
-
-    if (AInputEvent_getType(event) == AINPUT_EVENT_TYPE_KEY) {
-        int32_t keyCode = AKeyEvent_getKeyCode((const AInputEvent*)event);
-        int32_t action = AKeyEvent_getAction((const AInputEvent*)event);
-        int32_t button = 0;
-
-        if (action == AKEY_EVENT_ACTION_UP)
-            return 0;
-
-        switch (keyCode) {
-        case AKEYCODE_BUTTON_A:
-            vulkanExample->keyPressed(GAMEPAD_BUTTON_A);
-            break;
-        case AKEYCODE_BUTTON_B:
-            vulkanExample->keyPressed(GAMEPAD_BUTTON_B);
-            break;
-        case AKEYCODE_BUTTON_X:
-            vulkanExample->keyPressed(GAMEPAD_BUTTON_X);
-            break;
-        case AKEYCODE_BUTTON_Y:
-            vulkanExample->keyPressed(GAMEPAD_BUTTON_Y);
-            break;
-        case AKEYCODE_BUTTON_L1:
-            vulkanExample->keyPressed(GAMEPAD_BUTTON_L1);
-            break;
-        case AKEYCODE_BUTTON_R1:
-            vulkanExample->keyPressed(GAMEPAD_BUTTON_R1);
-            break;
-        case AKEYCODE_BUTTON_START:
-            vulkanExample->keyPressed(GAMEPAD_BUTTON_START);
-            break;
-        };
-
-        LOGD("Button %d pressed", keyCode);
-    }
-
-    return 0;
+    return android::NativeApp::onInput(event);
 }
 
-void ExampleBase::handleAppCommand(android_app * app, int32_t cmd) {
-    assert(app->userData != NULL);
-    ExampleBase* vulkanExample = (ExampleBase*)app->userData;
-    switch (cmd) {
-    case APP_CMD_SAVE_STATE:
-        LOGD("APP_CMD_SAVE_STATE");
-        /*
-        vulkanExample->app->savedState = malloc(sizeof(struct saved_state));
-        *((struct saved_state*)vulkanExample->app->savedState) = vulkanExample->state;
-        vulkanExample->app->savedStateSize = sizeof(struct saved_state);
-        */
-        break;
-    case APP_CMD_INIT_WINDOW:
-        LOGD("APP_CMD_INIT_WINDOW");
-        if (vulkanExample->androidApp->window != NULL) {
-            vulkanExample->initVulkan(false);
-            vulkanExample->initSwapchain();
-            vulkanExample->prepare();
-            assert(vulkanExample->prepared);
-        } else {
-            LOGE("No window assigned!");
-        }
-        break;
-    case APP_CMD_LOST_FOCUS:
-        LOGD("APP_CMD_LOST_FOCUS");
-        vulkanExample->focused = false;
-        break;
-    case APP_CMD_GAINED_FOCUS:
-        LOGD("APP_CMD_GAINED_FOCUS");
-        vulkanExample->focused = true;
-        break;
+void ExampleBase::onInitWindow() {
+    if (app->window != NULL) {
+        initVulkan();
+        setupWindow();
+        prepare();
+        assert(prepared);
     }
 }
+
+void ExampleBase::onLostFocus() {
+    focused = false;
+}
+
+void ExampleBase::onGainedFocus() {
+    focused = true;
+}
+
+void ExampleBase::setupWindow() {
+    size.width = ANativeWindow_getWidth(app->window);
+    size.height = ANativeWindow_getHeight(app->window);
+    camera.setAspectRatio(size);
+#if DIRECT2DISPLAY
+    swapChain.createSurface(size.width, size.height);
+#else
+    swapChain.createSurface(app->window);
+    swapChain.create(size, enableVsync);
+#endif
+}
+
 #else
 
 void ExampleBase::KeyboardHandler(GLFWwindow* window, int key, int scancode, int action, int mods) {

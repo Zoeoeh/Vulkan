@@ -80,12 +80,6 @@ namespace vkx {
 
         void createInstance();
 
-        void loadFunctions() {
-#if defined(__ANDROID__)
-            loadVulkanFunctions(instance);
-#endif
-        }
-
         void pickDevice() {
             // Physical device
             physicalDevices = instance.enumeratePhysicalDevices();
@@ -145,17 +139,15 @@ namespace vkx {
 
         void createContext() {
 #if defined(__ANDROID__)
+            requireExtension(VK_KHR_SURFACE_EXTENSION_NAME);
             requireExtension(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
 #else
             requireExtensions(glfw::getRequiredInstanceExtensions());
 #endif
-            this->enableValidation = enableValidation;
 
             requireDeviceExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
             createInstance();
-
-            loadFunctions();
 
             pickDevice();
 
@@ -166,7 +158,7 @@ namespace vkx {
             }
 
             if (enableDebugMarkers) {
-                debug::marker::setup(device);
+                debug::marker::setup(device.operator VkDevice());
             }
 
             pipelineCache = device.createPipelineCache(vk::PipelineCacheCreateInfo());
@@ -481,6 +473,7 @@ namespace vkx {
             return result;
         }
 
+#if USE_GLI
         CreateImageResult stageToDeviceImage(const vk::ImageCreateInfo& imageCreateInfo, const vk::MemoryPropertyFlags& memoryPropertyFlags, const gli::texture2D& tex2D) const {
             std::vector<MipData> mips;
             for (size_t i = 0; i < imageCreateInfo.mipLevels; ++i) {
@@ -490,6 +483,7 @@ namespace vkx {
             }
             return stageToDeviceImage(imageCreateInfo, memoryPropertyFlags, (vk::DeviceSize)tex2D.size(), tex2D.data(), mips);
         }
+#endif
 
         CreateBufferResult createBuffer(const vk::BufferUsageFlags& usageFlags, const vk::MemoryPropertyFlags& memoryPropertyFlags, vk::DeviceSize size, const void * data = nullptr) const {
             CreateBufferResult result;
@@ -618,7 +612,7 @@ namespace vkx {
             vk::PipelineShaderStageCreateInfo shaderStage;
             shaderStage.stage = stage;
 #if defined(__ANDROID__)
-            shaderStage.module = loadShader(androidApp->activity->assetManager, fileName.c_str(), device, stage);
+            shaderStage.module = vkx::loadShader(assetManager, fileName.c_str(), device, stage);
 #else
             shaderStage.module = vkx::loadShader(fileName.c_str(), device, stage);
 #endif
@@ -628,6 +622,7 @@ namespace vkx {
             return shaderStage;
         }
 
+#if !defined(__ANDROID__)
         inline vk::PipelineShaderStageCreateInfo loadGlslShader(const std::string& fileName, vk::ShaderStageFlagBits stage) const {
             auto source = readTextFile(fileName.c_str());
             vk::PipelineShaderStageCreateInfo shaderStage;
@@ -637,6 +632,7 @@ namespace vkx {
             shaderModules.push_back(shaderStage.module);
             return shaderStage;
         }
+#endif
 
         void submit(
             const vk::ArrayProxy<const vk::CommandBuffer>& commandBuffers,
@@ -695,6 +691,7 @@ namespace vkx {
 
     };
 
+#if USE_GLI
     // Template specialization for texture objects
     template <>
     inline CreateBufferResult Context::createBuffer(const vk::BufferUsageFlags& usage, const gli::textureCube& texture) const {
@@ -720,5 +717,5 @@ namespace vkx {
     inline void Context::copyToMemory(const vk::DeviceMemory &memory, const gli::texture& texture, size_t offset) const {
         copyToMemory(memory, texture.data(), vk::DeviceSize(texture.size()), offset);
     }
-
+#endif
 }

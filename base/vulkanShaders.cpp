@@ -7,6 +7,8 @@
 //
 
 #include "vulkanShaders.h"
+
+#if !defined(ANDROID)
 #include <GlslangToSpv.h>
 
 using namespace vkx;
@@ -166,5 +168,4 @@ vk::ShaderModule shader::glslToShaderModule(const vk::Device& device, const vk::
     return device.createShaderModule(moduleCreateInfo);
 }
 
-
-
+#endif

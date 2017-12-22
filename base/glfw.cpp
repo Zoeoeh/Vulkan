@@ -1,4 +1,5 @@
 #include "glfw.hpp"
+#if !defined(ANDROID)
 #include <mutex>
 
 namespace glfw {
@@ -113,3 +114,5 @@ namespace glfw {
     }
 
 }
+
+#endif

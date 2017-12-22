@@ -205,3 +205,8 @@ vulkanCapsViewer/vulkanreport.json
 # DLLs in bin
 !bin/*.dll
 bin_debug
+gradle
+gradlew
+gradlew.bat
+local.properties
+android.iml

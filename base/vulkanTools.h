@@ -71,7 +71,7 @@ namespace vkx {
         void* mapped{ nullptr };
 
         template <typename T = void>
-        inline T* map(size_t offset = 0, size_t size = VK_WHOLE_SIZE) {
+        inline T* map(size_t offset = 0, VkDeviceSize size = VK_WHOLE_SIZE) {
             mapped = device.mapMemory(memory, offset, size, vk::MemoryMapFlags());
             return (T*)mapped;
         }
@@ -81,17 +81,17 @@ namespace vkx {
             mapped = nullptr;
         }
 
-        inline void copy(size_t size, const void* data, size_t offset = 0) const {
+        inline void copy(size_t size, const void* data, VkDeviceSize offset = 0) const {
             memcpy((uint8_t*)mapped + offset, data, size);
         }
 
         template<typename T>
-        inline void copy(const T& data, size_t offset = 0) const {
+        inline void copy(const T& data, VkDeviceSize offset = 0) const {
             copy(sizeof(T), &data, offset);
         }
 
         template<typename T>
-        inline void copy(const std::vector<T>& data, size_t offset = 0) const {
+        inline void copy(const std::vector<T>& data, VkDeviceSize offset = 0) const {
             copy(sizeof(T) * data.size(), data.data(), offset);
         }
 

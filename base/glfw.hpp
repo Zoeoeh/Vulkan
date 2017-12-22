@@ -1,11 +1,14 @@
 #pragma once
 
+#if !defined(ANDROID)
+
 #include <string>
 #include <vector>
 #include <functional>
 #include <set>
 #include <vulkan/vulkan.hpp>
 #include <glm/glm.hpp>
+
 #include <GLFW/glfw3.h>
 
 namespace glfw {
@@ -77,5 +80,5 @@ namespace glfw {
 
         GLFWwindow* window { nullptr };
     };
-
 }
+#endif

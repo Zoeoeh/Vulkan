@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <vulkan/vulkan.hpp>
 
+#if !defined(ANDROID)
 namespace vkx {
     namespace shader {
         using SpvBuffer = std::vector<uint32_t>;
@@ -22,3 +23,4 @@ namespace vkx {
         vk::ShaderModule glslToShaderModule(const vk::Device& device, const vk::ShaderStageFlagBits shaderType, const std::string& shaderSource);
     }
 }
+#endif

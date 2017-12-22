@@ -1,0 +1,37 @@
+
+
+buildscript {
+    repositories {
+        jcenter()
+        google()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:3.0.1'
+    }
+}
+
+plugins {
+    id 'de.undercouch.download' version '3.3.0'
+    id "cz.malohlava" version "1.0.3"
+}
+
+allprojects {
+    repositories {
+        jcenter()
+        google()
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+
+
+def packages = [
+    glm: [
+        file: 'glm-0.9.8.tgz',
+        versionId: 'BlkJNwaYV2Gfy5XwMeU7K0uzPDRKFMt2',
+        checksum: 'd2b42cee31d2bc17bab6ce69e6b3f30a',
+    ],
+]
+

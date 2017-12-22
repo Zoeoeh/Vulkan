@@ -8,6 +8,8 @@
 
 #pragma once
 
+#if USE_ASSIMP
+
 #include <stdlib.h>
 #include <string>
 #include <fstream>
@@ -24,7 +26,7 @@
 
 #include <vulkan/vulkan.h>
 
-#include <assimp/Importer.hpp> 
+#include <assimp/Importer.hpp>
 #include <assimp/scene.h>     
 #include <assimp/postprocess.h>
 #include <assimp/cimport.h>
@@ -403,3 +405,4 @@ namespace vkx {
         }
     };
 }
+#endif

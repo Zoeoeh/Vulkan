@@ -18,6 +18,27 @@ Context::DeviceExtensionsPickerFunction Context::DEFAULT_DEVICE_EXTENSIONS_PICKE
     return {};
 };
 
+using LayerVector = std::vector<const char*>;
+
+LayerVector filterLayers(const LayerVector& desiredLayers) {
+    static std::set<std::string> validLayerNames;
+    static std::once_flag once;
+    std::call_once(once, [&]{
+        auto layersProperties = vk::enumerateInstanceLayerProperties();
+        for (const auto& layerProperties : layersProperties) {
+            validLayerNames.insert({(char*)layerProperties.layerName});
+        }
+    });
+    LayerVector result;
+    for (const auto& layer : desiredLayers) {
+        std::string layerString(layer);
+        if (validLayerNames.count(layerString)) {
+            result.push_back(layer);
+        }
+    }
+    return result;
+}
+
 void Context::createInstance() {
     if (enableValidation) {
         requireExtension(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
@@ -48,9 +69,11 @@ void Context::createInstance() {
         instanceCreateInfo.ppEnabledExtensionNames = enabledExtensions.data();
     }
 
+    LayerVector layers;
     if (enableValidation) {
-        instanceCreateInfo.enabledLayerCount = (uint32_t)debug::validationLayerNames.size();
-        instanceCreateInfo.ppEnabledLayerNames = debug::validationLayerNames.data();
+        layers = filterLayers(debug::validationLayerNames);
+        instanceCreateInfo.enabledLayerCount = (uint32_t)layers.size();
+        instanceCreateInfo.ppEnabledLayerNames = layers.data();
     }
 
     instance = vk::createInstance(instanceCreateInfo);

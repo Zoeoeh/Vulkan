@@ -1,10 +1,30 @@
-cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
-cmake_policy(VERSION 3.8)
+cmake_minimum_required(VERSION 3.6 FATAL_ERROR)
+cmake_policy(VERSION 3.6)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 include("cmake/defaults.cmake")
 set(NAME vulkanExamples)
 
 project(${NAME})
+
+if (NOT ANDROID)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/bin")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/bin_debug")
+    set(CMAKE_DEBUG_POSTFIX "d")
+endif()
+
+if (ANDROID)
+    include_directories(${VULKAN_SDK}/include)
+
+    set(APP_GLUE_DIR ${ANDROID_NDK}/sources/android/native_app_glue)
+    include_directories(${APP_GLUE_DIR})
+    add_library( app-glue STATIC ${APP_GLUE_DIR}/android_native_app_glue.c)
+else()
+    find_package(Vulkan REQUIRED)
+    include_directories(${Vulkan_INCLUDE_DIR})
+    link_libraries(${Vulkan_LIBRARY})
+endif()
+
 
 if (WIN32)
   if (MSVC)
@@ -22,11 +42,9 @@ set_target_properties(SetupRelease PROPERTIES FOLDER "CMakeTargets")
 add_custom_target(SetupDebug ALL ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/bin_debug)
 set_target_properties(SetupDebug PROPERTIES FOLDER "CMakeTargets")
 
-find_package(Vulkan REQUIRED)
-include_directories(${Vulkan_INCLUDE_DIR})
-link_libraries(${Vulkan_LIBRARY})
-
-if(WIN32)
+if (ANDROID)
+    add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
+elseif (WIN32)
     add_definitions(-DVK_USE_PLATFORM_WIN32_KHR)
 else()
     add_definitions(-DVK_USE_PLATFORM_XCB_KHR)
@@ -35,8 +53,9 @@ else()
 endif()
 
 
+if (ANDROID)
 
-if (WIN32)
+elseif (WIN32)
     add_dependency_external_projects(glfw3)
     list(APPEND EXTERNALS glfw3)
     include_directories(${GLFW3_INCLUDE_DIR})
@@ -63,18 +82,24 @@ else()
     link_directories(${ASSIMP_LIBRARY_DIRS})
 endif()
 
-add_dependency_external_projects(glm)
-list(APPEND EXTERNALS glm)
-include_directories(${GLM_INCLUDE_DIRS})
 
-add_dependency_external_projects(gli)
-list(APPEND EXTERNALS gli)
-include_directories(${GLI_INCLUDE_DIRS})
+if (ANDROID)
+    include_directories(C:/Android/Vulkan/glm-0.9.8)
+    include_directories(C:/Android/Vulkan/gli-0.8.2)
+else()
+    add_dependency_external_projects(glm)
+    list(APPEND EXTERNALS glm)
+    include_directories(${GLM_INCLUDE_DIRS})
 
-add_dependency_external_projects(glslang)
-list(APPEND EXTERNALS glslang)
-include_directories(${GLSLANG_INCLUDE_DIRS})
-link_libraries(${GLSLANG_LIBRARIES})
+    add_dependency_external_projects(gli)
+    list(APPEND EXTERNALS gli)
+    include_directories(${GLI_INCLUDE_DIRS})
+
+    add_dependency_external_projects(glslang)
+    list(APPEND EXTERNALS glslang)
+    include_directories(${GLSLANG_INCLUDE_DIRS})
+    link_libraries(${GLSLANG_LIBRARIES})
+endif()
 
 add_subdirectory(base)
 
@@ -86,6 +111,9 @@ if (NOT WIN32)
     link_libraries(${CMAKE_THREAD_LIBS_INIT})
 endif()
 
-
-add_subdirectory(examples)
+if (ANDROID)
+    add_subdirectory(android)
+else()
+    add_subdirectory(examples)
+endif()
 

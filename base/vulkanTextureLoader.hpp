@@ -17,6 +17,7 @@
 #include <android/asset_manager.h>
 #endif
 
+#if !defined(__ANDROID__)
 namespace vkx {
 
     struct Texture {
@@ -606,3 +607,4 @@ namespace vkx {
         }
     };
 }
+#endif

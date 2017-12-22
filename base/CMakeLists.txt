@@ -1,5 +1,6 @@
 file(GLOB COMMON_SOURCE *.cpp *.h *.hpp)
-add_library(common ${COMMON_SOURCE})
+
+add_library(common ${COMMON_SOURCE} ${PLATFORM_SOURCE})
 set_target_properties(common PROPERTIES FOLDER "examples")
 foreach(EXTERNAL ${EXTERNALS})
     add_dependencies(common ${EXTERNAL})

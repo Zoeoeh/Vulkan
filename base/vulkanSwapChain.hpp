@@ -45,20 +45,94 @@ namespace vkx {
         }
 
         void createSurface(
-#ifdef __ANDROID__
+#if DIRECT2DISPLAY
+                uint32_t width, uint32_t height
+#elif defined(__ANDROID__)
             ANativeWindow* window
 #else
             GLFWwindow* window
 #endif
             ) {
             // Create surface depending on OS
-#ifdef __ANDROID__
+#if DIRECT2DISPLAY
+            uint32_t displayPropertyCount;
+
+            const auto& physicalDevice = context.physicalDevice;
+            auto displaysProperties = physicalDevice.getDisplayPropertiesKHR();
+
+            bool foundMode = false;
+            vk::DisplayModeKHR displayMode;
+            vk::DisplayKHR display;
+            for (const auto& displayProperty : displaysProperties) {
+                auto modesProperties = physicalDevice.getDisplayModePropertiesKHR(displayProperty.display);
+                for (auto modeProperty : modesProperties) {
+                    if (modeProperty.parameters.visibleRegion.width == width && modeProperty.parameters.visibleRegion.height == height) {
+                        display = displayProperty.display;
+                        displayMode = modeProperty.displayMode;
+                        foundMode = true;
+                        break;
+                    }
+                }
+                if (foundMode) {
+                    break;
+                }
+            }
+
+            if(!foundMode) {
+                throw new std::runtime_error("Can't find a display and a display mode!");
+            }
+
+            // Search for a best plane we can use
+            uint32_t bestPlaneIndex = UINT32_MAX;
+            VkDisplayKHR* pDisplays = NULL;
+            auto planesProperties = physicalDevice.getDisplayPlanePropertiesKHR();
+            for (uint32_t planeIndex = 0; bestPlaneIndex == UINT32_MAX && planeIndex < planesProperties.size(); ++planeIndex) {
+                auto supportedDisplays = physicalDevice.getDisplayPlaneSupportedDisplaysKHR(planeIndex);
+                // Find a display that matches the current plane
+                bestPlaneIndex = UINT32_MAX;
+                for (const auto& supportedDisplay : supportedDisplays) {
+                    if (supportedDisplay == display) {
+                        bestPlaneIndex = planeIndex;
+                        break;
+                    }
+                }
+            }
+
+            if(bestPlaneIndex == UINT32_MAX) {
+                throw new std::runtime_error("Can't find a plane for displaying!");
+            }
+
+            auto planeCap = physicalDevice.getDisplayPlaneCapabilitiesKHR(displayMode, bestPlaneIndex);
+
+            vk::DisplaySurfaceCreateInfoKHR surfaceInfo;
+            if (planeCap.supportedAlpha & vk::DisplayPlaneAlphaFlagBitsKHR::ePerPixelPremultiplied) {
+                surfaceInfo.alphaMode = vk::DisplayPlaneAlphaFlagBitsKHR::ePerPixelPremultiplied;
+            } else if (planeCap.supportedAlpha & vk::DisplayPlaneAlphaFlagBitsKHR::ePerPixel) {
+                surfaceInfo.alphaMode = vk::DisplayPlaneAlphaFlagBitsKHR::ePerPixel;
+            } else if (planeCap.supportedAlpha & vk::DisplayPlaneAlphaFlagBitsKHR::eGlobal) {
+                surfaceInfo.alphaMode = vk::DisplayPlaneAlphaFlagBitsKHR::eGlobal;
+            } else if (planeCap.supportedAlpha & vk::DisplayPlaneAlphaFlagBitsKHR::eOpaque) {
+                surfaceInfo.alphaMode = vk::DisplayPlaneAlphaFlagBitsKHR::eOpaque;
+            }
+
+            surfaceInfo.displayMode = displayMode;
+            surfaceInfo.planeIndex = bestPlaneIndex;
+            surfaceInfo.planeStackIndex = planesProperties[bestPlaneIndex].currentStackIndex;
+            surfaceInfo.transform = vk::SurfaceTransformFlagBitsKHR::eIdentity;
+            surfaceInfo.globalAlpha = 1.0;
+            surfaceInfo.imageExtent.width = width;
+            surfaceInfo.imageExtent.height = height;
+            surface = context.instance.createDisplayPlaneSurfaceKHR(surfaceInfo);
+#elif  defined(__ANDROID__)
             vk::AndroidSurfaceCreateInfoKHR surfaceCreateInfo;
             surfaceCreateInfo.window = window;
-            surface = instance.createAndroidSurfaceKHR(surfaceCreateInfo);
+            surface = context.instance.createAndroidSurfaceKHR(surfaceCreateInfo);
 #else
             surface = glfw::createWindowSurface(context.instance, window);
 #endif
+
+            // Find a queue for both present and graphics
+            queueNodeIndex = context.findQueue(vk::QueueFlagBits::eGraphics, surface);
 
             // Get list of supported surface formats
             std::vector<vk::SurfaceFormatKHR> surfaceFormats = context.physicalDevice.getSurfaceFormatsKHR(surface);
@@ -67,7 +141,7 @@ namespace vkx {
 
             // If the surface format list only includes one entry with  vk::Format::eUndefined,
             // there is no preferered format, so we assume  vk::Format::eB8G8R8A8Unorm
-            if ((formatCount == 1) && (surfaceFormats[0].format == vk::Format::eUndefined)) {
+            if (surfaceFormats[0].format == vk::Format::eUndefined) {
                 colorFormat = vk::Format::eB8G8R8A8Unorm;
             } else {
                 // Always select the first available color format
@@ -78,8 +152,6 @@ namespace vkx {
             }
             colorSpace = surfaceFormats[0].colorSpace;
 
-            // Find a queue for both present and graphics
-            queueNodeIndex = context.findQueue(vk::QueueFlagBits::eGraphics, surface);
         }
 
         // Creates an os specific surface
