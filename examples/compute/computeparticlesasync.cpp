@@ -68,7 +68,7 @@ public:
         glm::vec2 vel;
         glm::vec4 gradientPos;
     };
-
+ 
     vk::PipelineLayout pipelineLayout;
     vk::DescriptorSet descriptorSetPostCompute;
     vk::DescriptorSetLayout descriptorSetLayout;
